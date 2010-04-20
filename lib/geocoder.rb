@@ -13,27 +13,25 @@ module Geocoder
     base.class_eval do
 
       # named scope: geocoded objects
-      named_scope :geocoded,
-        :conditions => "#{geocoder_options[:latitude]} IS NOT NULL " +
-          "AND #{geocoder_options[:longitude]} IS NOT NULL"
+      scope :geocoded, where("#{geocoder_options[:latitude]} IS NOT NULL " +
+                             "AND #{geocoder_options[:longitude]} IS NOT NULL")
 
       # named scope: not-geocoded objects
-      named_scope :not_geocoded,
-        :conditions => "#{geocoder_options[:latitude]} IS NULL " +
-          "OR #{geocoder_options[:longitude]} IS NULL"
+      scope :not_geocoded, where("#{geocoder_options[:latitude]} IS NULL " +
+                                 "OR #{geocoder_options[:longitude]} IS NULL")
       
       ##
       # Find all objects within a radius (in miles) of the given location
       # (address string). Location (the first argument) may be either a string
       # to geocode or an array of coordinates (<tt>[lat,long]</tt>).
       #
-      named_scope :near, lambda{ |location, *args|
+      scope :near, lambda{ |location, *args|
         latitude, longitude = location.is_a?(Array) ?
           location : Geocoder.fetch_coordinates(location)
         if latitude and longitude
           near_scope_options(latitude, longitude, *args)
         else
-          {}
+          scoped
         end
       }
     end
@@ -81,15 +79,12 @@ module Geocoder
         "COS(#{lat_attr} * PI() / 180) * " +
         "POWER(SIN((#{longitude} - #{lon_attr}) * " +
         "PI() / 180 / 2), 2) ))"
-      {
-        :select => "*, #{distance} AS distance",
-        :conditions => \
-          ["#{lat_attr} BETWEEN ? AND ? AND #{lon_attr} BETWEEN ? AND ?"] +
-          coordinate_bounds(latitude, longitude, radius),
-        :having => "#{distance} <= #{radius}",
-        :order  => options[:order],
-        :limit  => limit_clause(options)
-      }
+     
+      select("*, #{distance} AS distance").
+      where("#{lat_attr} BETWEEN ? AND ? AND #{lon_attr} BETWEEN ? AND ?", *coordinate_bounds(latitude, longitude, radius)).
+      having("#{distance} <= #{radius}").
+      order(options[:order]).
+      limit(limit_clause(options))
     end
 
     ##
@@ -101,13 +96,9 @@ module Geocoder
     def approx_near_scope_options(latitude, longitude, radius, options)
       lat_attr = geocoder_options[:latitude]
       lon_attr = geocoder_options[:longitude]
-      {
-        :conditions => \
-          ["#{lat_attr} BETWEEN ? AND ? AND #{lon_attr} BETWEEN ? AND ?"] +
-          coordinate_bounds(latitude, longitude, radius),
-        :order  => options[:order],
-        :limit  => limit_clause(options)
-      }
+      where("#{lat_attr} BETWEEN ? AND ? AND #{lon_attr} BETWEEN ? AND ?", *coordinate_bounds(latitude, longitude, radius)).
+      order(options[:order]).
+      limit(limit_clause(options))
     end
     
     ##
@@ -169,8 +160,7 @@ module Geocoder
   #
   def nearbys(radius = 20, options = {})
     return [] unless geocoded?
-    options = {:conditions => ["id != ?", id]}.merge(options)
-    self.class.near(read_coordinates, radius, options) - [self]
+    self.class.near(read_coordinates, radius, options).where("id != ?", id)
   end
   
   ##
