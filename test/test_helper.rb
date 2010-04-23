@@ -5,30 +5,20 @@ require 'active_support/core_ext'
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 
-##
-# Simulate enough of ActiveRecord::Base that objects can be used for testing.
-#
-module ActiveRecord
-  class Base
-    
-    def initialize
-      @attributes = {}
+require 'active_record'
+
+ActiveRecord::Base.logger = Logger.new(STDERR)
+
+ActiveRecord::Base.establish_connection(
+    :adapter => "sqlite3",
+    :database  => ":memory:"
+)
+
+ActiveRecord::Schema.define do
+    create_table :venues do |t|
+        t.string :name
+        t.string :address
     end
-    
-    def read_attribute(attr_name)
-      @attributes[attr_name.to_sym]
-    end
-    
-    def write_attribute(attr_name, value)
-      @attributes[attr_name.to_sym] = value
-    end
-    
-    def update_attribute(attr_name, value)
-      write_attribute(attr_name.to_sym, value)
-    end
-    
-    def self.named_scope(*args); end
-  end
 end
 
 # Require Geocoder after ActiveRecord simulator.
@@ -56,12 +46,6 @@ class Venue < ActiveRecord::Base
     write_attribute :address, address
   end
   
-  ##
-  # If method not found, assume it's an ActiveRecord attribute reader.
-  #
-  def method_missing(name, *args, &block)
-    @attributes[name]
-  end
 end
 
 class Test::Unit::TestCase
